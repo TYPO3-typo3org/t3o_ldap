@@ -1,0 +1,23 @@
+  # cat=basic/enable; type=boolean; label=Password updates: Enable new Password update mechanism
+enableExternalPasswordUpdates = 0
+
+  # cat=basic/enable; type=boolean; label=LDAP Password updates: Enable new Password update mechanism in LDAP
+enableLdapPasswordUpdates = 0
+
+  # cat=LDAP/enable/a; type=string; label=IP-Address or Hostname: LDAP Server name or IP-Address
+ldapServer = 127.0.0.1
+
+  # cat=LDAP/enable/10; type=int+; label=LDAP Port: The Port of the LDAP Server (389 or 636)
+ldapServerPort = 389
+
+  # cat=LDAP/enable/10; type=int+; label=LDAP protocol: The protocol version of LDAP
+ldapProtocolVersion = 3
+
+  # cat=LDAP/enable/a; type=string; label=Admin Bind-DN: LDAP admin Bind-DN to modify users
+ldapBindDn =
+
+  # cat=LDAP/enable/a; type=string; label=Admin Password: LDAP admin  password to modify users
+ldapBindPassword =
+
+  # cat=LDAP/enable/a; type=string; label=Base-DN: The Base-DN to use when updating LDAP entries
+ldapBaseDnForPasswordChanges =
