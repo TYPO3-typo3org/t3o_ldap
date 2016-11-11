@@ -236,7 +236,7 @@ class Tx_T3oLdap_Connectors_Ldap {
      * @return string
      */
     private function getDnForUserName($username) {
-        $dn = 'cn=' . $username . ',' . $this->ldapBaseDnForPasswordChanges;
+        $dn = 'uid=' . $username . ',' . $this->ldapBaseDnForPasswordChanges;
         return $dn;
     }
 
