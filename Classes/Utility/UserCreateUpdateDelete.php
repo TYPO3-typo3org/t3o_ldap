@@ -33,9 +33,6 @@ class Tx_T3oLdap_Utility_UserCreateUpdateDelete {
 
         $ret = false;
 
-        // LDAP Configuration
-        $extensionConfiguration = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['t3o_ldap']);
-
         /** @var Tx_T3oLdap_Connectors_Ldap $ldap */
         $ldap = t3lib_div::makeInstance('Tx_T3oLdap_Connectors_Ldap');
 
@@ -43,11 +40,54 @@ class Tx_T3oLdap_Utility_UserCreateUpdateDelete {
 
             $ret = $ldap->updateUser($userData);
 
+            if ($ret === true) {
+                /** @var $flashMessage t3lib_FlashMessage */
+                $flashMessage = t3lib_div::makeInstance(
+                    't3lib_FlashMessage',
+                    'Frontend user ' . $userData['username'] . ' (UID ' . $feUserUid . ') has been updated in LDAP.',
+                    'LDAP Update User Status',
+                    t3lib_FlashMessage::OK
+                );
+            } else {
+                /** @var $flashMessage t3lib_FlashMessage */
+                $flashMessage = t3lib_div::makeInstance(
+                    't3lib_FlashMessage',
+                    'Failed to update frontend user ' . $userData['username'] . ' (UID ' . $feUserUid . ') in LDAP. ' .
+                        'The server responded with: ' . $ldap->getLastLdapError(),
+                    'LDAP Update User Status',
+                    t3lib_FlashMessage::ERROR
+                );
+            }
+
             // TODO Delete User in LDAP (notify consumer systems)
             // $ret = $ldap->deleteUser($userData);
 
         } elseif ($createIfNotExists === true) {
+
             $ret = $ldap->createUser($feUserUid, $userData);
+
+            if ($ret === true) {
+                /** @var $flashMessage t3lib_FlashMessage */
+                $flashMessage = t3lib_div::makeInstance(
+                    't3lib_FlashMessage',
+                    'Frontend user ' . $userData['username'] . ' (UID ' . $feUserUid . ') has been created in LDAP.',
+                    'LDAP Create User Status',
+                    t3lib_FlashMessage::OK
+                );
+            } else {
+                /** @var $flashMessage t3lib_FlashMessage */
+                $flashMessage = t3lib_div::makeInstance(
+                    't3lib_FlashMessage',
+                    'Failed to update frontend user ' . $userData['username'] . ' (UID ' . $feUserUid . ') in LDAP. ' .
+                    'The server responded with: ' . $ldap->getLastLdapError(),
+                    'LDAP Create User Status',
+                    t3lib_FlashMessage::ERROR
+                );
+            }
+        }
+
+        if (isset($flashMessage)) {
+            t3lib_FlashMessageQueue::addMessage($flashMessage);
         }
 
         return $ret;

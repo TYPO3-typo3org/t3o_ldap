@@ -38,7 +38,8 @@ class Tx_T3oLdap_Hooks_DataHandlerHook {
     }
 
     /**
-     * Use DataHandler "afterAllOperations" hook to update or create FE User
+     * Use DataHandler "afterAllOperations" hook to update or create FE Users
+     * in LDAP.
      *
      * @return void
      */
@@ -56,7 +57,14 @@ class Tx_T3oLdap_Hooks_DataHandlerHook {
             }
         }
         catch(Exception $e) {
-            // TODO Add exception
+            /** @var $flashMessage t3lib_FlashMessage */
+            $flashMessage = t3lib_div::makeInstance(
+                't3lib_FlashMessage',
+                'Failed to update users in LDAP: ' . $e->getMessage(),
+                'Error in processDatamap_afterAllOperations',
+                t3lib_FlashMessage::ERROR
+            );
+            t3lib_FlashMessageQueue::addMessage($flashMessage);
         }
     }
 
