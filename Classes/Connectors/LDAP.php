@@ -72,6 +72,12 @@ class Tx_T3oLdap_Connectors_Ldap {
     private $extensionConfiguration = array();
 
     /**
+     * Last LDAP error in this class
+     * @var string
+     */
+    private $lastLdapError = '';
+
+    /**
      * LDAP constructor.
      */
     public function __construct()
@@ -79,7 +85,7 @@ class Tx_T3oLdap_Connectors_Ldap {
         // Disable certificate checks on LDAP TLS
         putenv('LDAPTLS_REQCERT=never');
 
-        // Move to TypoScript configuration object if more than one LDAP server is required per installation
+        // TODO Move to TypoScript configuration object if more than one LDAP server is required per installation
         $this->extensionConfiguration = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['t3o_ldap']);
         $this->ldapServer = trim($this->extensionConfiguration['ldapServer']);
         $this->ldapServerPort = intval($this->extensionConfiguration['ldapServerPort']);
@@ -87,6 +93,14 @@ class Tx_T3oLdap_Connectors_Ldap {
         $this->ldapBindDn = trim($this->extensionConfiguration['ldapBindDn']);
         $this->ldapBindPassword = $this->extensionConfiguration['ldapBindPassword'];
         $this->ldapBaseDnForPasswordChanges = trim($this->extensionConfiguration['ldapBaseDnForPasswordChanges']);
+
+        // Connect and bind
+        $this->createLdapConnection();
+        $this->ldapBind(
+            $this->ldapConnection,
+            $this->ldapBindDn,
+            $this->ldapBindPassword
+        );
     }
 
     /**
@@ -253,11 +267,12 @@ class Tx_T3oLdap_Connectors_Ldap {
         $dn = $this->getDnForUserName($username);
         $filter = '(|(objectClass=typo3Person))';
         $attributes = array('sn', 'email', 'ou');
-        $searchResult = ldap_search($this->ldapConnection, $dn, $filter, $attributes);
-        $info = ldap_get_entries($this->ldapConnection, $searchResult);
-
-        if (intval($info['count']) > 0) {
-            $ret = true;
+        $searchResult = @ldap_search($this->ldapConnection, $dn, $filter, $attributes);
+        if ($searchResult) {
+            $info = ldap_get_entries($this->ldapConnection, $searchResult);
+            if (intval($info['count']) > 0) {
+                $ret = true;
+            }
         }
 
         return $ret;
@@ -285,6 +300,8 @@ class Tx_T3oLdap_Connectors_Ldap {
         if ( $res === true ) {
             // TODO $this->updateFeUserLastLdapUpdateTimestamp($feUserUid);
             $ret = true;
+        } else {
+            $this->setLastLdapError(ldap_error($this->ldapConnection));
         }
 
         return $ret;
@@ -314,7 +331,6 @@ class Tx_T3oLdap_Connectors_Ldap {
         $dn = $this->getDnForUserName($userData['username']);
 
         $ldapUserObject = $this->buildLdapObjectArray($userData);
-
         $res = ldap_add(
             $this->ldapConnection,
             $dn,
@@ -324,6 +340,8 @@ class Tx_T3oLdap_Connectors_Ldap {
         if ( $res === true ) {
             $this->updateFeUserLastLdapUpdateTimestamp($feUserUid);
             $ret = true;
+        } else {
+            $this->setLastLdapError(ldap_error($this->ldapConnection));
         }
 
         return $ret;
@@ -336,49 +354,81 @@ class Tx_T3oLdap_Connectors_Ldap {
      * @return array
      */
     private function buildLdapObjectArray($userData) {
+
         $ldapUserObject = array(
             'objectclass' => array(
                 0 => 'top',
                 1 => 'person',
                 2 => 'typo3Person',
                 3 => 'inetOrgPerson'
-            ),
-            'cn' => trim($userData['first_name'] . ' ' . $userData['last_name']),
-            'displayName' => trim($userData['first_name'] . ' ' . $userData['last_name']),
-            'givenName' => trim($userData['first_name']),
-            'sn' => trim($userData['last_name']),
-            'street' => trim($userData['address']),
-            'postalCode' => trim($userData['zip']),
-            'l' => trim($userData['city']),
-            'co' => trim($userData['country'])
+            )
         );
+
+        if ( trim($userData['first_name'] . ' ' . $userData['last_name']) !== '' ) {
+            $ldapUserObject['cn'] = trim($userData['first_name'] . ' ' . $userData['last_name']);
+        }
+        if ( trim($userData['first_name'] . ' ' . $userData['last_name']) !== '' ) {
+            $ldapUserObject['displayName'] = trim($userData['first_name'] . ' ' . $userData['last_name']);
+        }
+        if ( trim($userData['first_name']) !== '' ) {
+            $ldapUserObject['givenName'] = trim($userData['first_name']);
+        }
+        if ( trim($userData['last_name']) !== '' ) {
+            $ldapUserObject['sn'] = trim($userData['last_name']);
+        }
+        if ( trim($userData['address']) !== '' ) {
+            $ldapUserObject['street'] = trim($userData['address']);
+        }
+        if ( trim($userData['zip']) !== '' ) {
+            $ldapUserObject['postalCode'] = trim($userData['zip']);
+        }
+        if ( trim($userData['city']) !== '' ) {
+            $ldapUserObject['l'] = trim($userData['city']);
+        }
+        if ( trim($userData['country']) !== '' ) {
+            $countryDetails = $this->getCountryDetailsByCountryName($userData['country']);
+            if ($countryDetails !== false) {
+                if (trim($countryDetails['cn_iso_2']) !== '') {
+                    $ldapUserObject['c'] = trim($countryDetails['cn_iso_2']);
+                }
+                if (trim($countryDetails['cn_short_en']) !== '') {
+                    $ldapUserObject['co'] = trim($countryDetails['cn_short_en']);
+                }
+            }
+        }
 
         $url = filter_var($userData['www'], FILTER_VALIDATE_URL);
         if ($url !== false) {
             $ldapUserObject['labeledURI'] = $url;
         }
-
         $email = filter_var($userData['email'], FILTER_VALIDATE_EMAIL);
         if ($email !== false) {
             $ldapUserObject['mail'] = $email;
         }
-
-        $homePhone = trim($userData['telephone']);
-        if ($homePhone !== false) {
-            $ldapUserObject['homePhone'] = $homePhone;
+        if (trim($userData['telephone']) !== '') {
+            $ldapUserObject['homePhone'] = trim($userData['telephone']);
         }
-
-        $facsimileTelephoneNumber = trim($userData['fax']);;
-        if ($facsimileTelephoneNumber !== false) {
-            $ldapUserObject['facsimileTelephoneNumber'] = $facsimileTelephoneNumber;
+        if (trim($userData['fax']) !== '') {
+            $ldapUserObject['facsimileTelephoneNumber'] = trim($userData['fax']);
         }
 
         // If the password is not salted, it has been submitted and must be included in the LDAP update
         if ($this->isSaltedPassword($userData['password']) === false) {
             /** @var Tx_T3oLdap_Utility_PasswordHashing $passwordHashing */
             $passwordHashing = t3lib_div::makeInstance('Tx_T3oLdap_Utility_PasswordHashing');
-            $userData['password'] = $passwordHashing->getPasswordHash($userData['password'], 'sha1');
+            $ldapUserObject['userPassword'] = $passwordHashing->getPasswordHash($userData['password'], 'sha1');
         }
+
+        if (trim($ldapUserObject['sn']) === '') {
+            $ldapUserObject['sn'] = $userData['username'];
+        }
+        if (trim($ldapUserObject['cn']) === '') {
+            $ldapUserObject['cn'] = $userData['username'];
+        }
+        if (trim($ldapUserObject['uid']) === '') {
+            $ldapUserObject['uid'] = $userData['username'];
+        }
+
         return $ldapUserObject;
     }
 
@@ -417,6 +467,46 @@ class Tx_T3oLdap_Connectors_Ldap {
                 'tx_t3oldap_lastupdate_ts' => $GLOBALS['EXEC_TIME']
             )
         );
+    }
+
+    /**
+     * @return string
+     */
+    public function getLastLdapError()
+    {
+        return $this->lastLdapError;
+    }
+
+    /**
+     * @param string $lastLdapError
+     * @return void
+     */
+    public function setLastLdapError($lastLdapError)
+    {
+        $this->lastLdapError = $lastLdapError;
+    }
+
+    private function getCountryDetailsByCountryName($countryName) {
+
+        $ret = false;
+
+        $whereClause = 'cn_short_en LIKE ' . $GLOBALS['TYPO3_DB']->fullQuoteStr($countryName, 'static_countries');
+        $selectFields = 'uid, cn_iso_2, cn_short_en';
+        $fromTable = 'static_countries';
+        $groupBy = '';
+        $orderBy = '';
+        $limit = '1';
+
+        $result = $GLOBALS['TYPO3_DB']->exec_SELECTquery($selectFields, $fromTable, $whereClause, $groupBy, $orderBy, $limit);
+        if ( $result ) {
+            if ( $GLOBALS['TYPO3_DB']->sql_num_rows($result) == 1 ) {
+                $ret = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($result);
+                $GLOBALS['TYPO3_DB']->sql_free_result($result);
+            }
+        }
+
+        return $ret;
+
     }
 
     /**
