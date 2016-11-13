@@ -45,27 +45,32 @@ class Tx_T3oLdap_Hooks_DataHandlerHook {
      */
     public function processDatamap_afterAllOperations(t3lib_TCEmain $dataHandler) {
 
-        try {
-            foreach ($dataHandler->datamap as $tableName => $configuration) {
-                if ($tableName === 'fe_users') {
-                    foreach ($configuration as $feUserUid => $changedFields) {
-                        /** @var Tx_T3oLdap_Utility_UserCreateUpdateDelete $userUtility */
-                        $userUtility = t3lib_div::makeInstance('Tx_T3oLdap_Utility_UserCreateUpdateDelete');
-                        $userUtility->updateUser($feUserUid, $changedFields);
+        $extensionConfiguration = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['t3o_ldap']);
+        $enableLdapPasswordUpdates = intval($extensionConfiguration['enableLdapPasswordUpdates']);
+
+        if (intval($enableLdapPasswordUpdates) === 1) {
+            try {
+                foreach ($dataHandler->datamap as $tableName => $configuration) {
+                    if ($tableName === 'fe_users') {
+                        foreach ($configuration as $feUserUid => $changedFields) {
+                            /** @var Tx_T3oLdap_Utility_UserCreateUpdateDelete $userUtility */
+                            $userUtility = t3lib_div::makeInstance('Tx_T3oLdap_Utility_UserCreateUpdateDelete');
+                            $userUtility->updateUser($feUserUid, $changedFields);
+                        }
                     }
                 }
+            } catch (Exception $e) {
+                /** @var $flashMessage t3lib_FlashMessage */
+                $flashMessage = t3lib_div::makeInstance(
+                    't3lib_FlashMessage',
+                    'Failed to update users in LDAP: ' . $e->getMessage(),
+                    'Error in processDatamap_afterAllOperations',
+                    t3lib_FlashMessage::ERROR
+                );
+                t3lib_FlashMessageQueue::addMessage($flashMessage);
             }
         }
-        catch(Exception $e) {
-            /** @var $flashMessage t3lib_FlashMessage */
-            $flashMessage = t3lib_div::makeInstance(
-                't3lib_FlashMessage',
-                'Failed to update users in LDAP: ' . $e->getMessage(),
-                'Error in processDatamap_afterAllOperations',
-                t3lib_FlashMessage::ERROR
-            );
-            t3lib_FlashMessageQueue::addMessage($flashMessage);
-        }
+
     }
 
 }
