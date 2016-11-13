@@ -340,11 +340,11 @@ class Tx_T3oLdap_Connectors_Ldap {
     /**
      * Delete a user in LDAP
      *
-     * @param array $userData The user data array
+     * @param string $username The username to delete in LDAP
      * @return bool
      */
-    public function deleteUser($userData) {
-        $dn = $this->getDnForUserName($userData['username']);
+    public function deleteUser($username) {
+        $dn = $this->getDnForUserName($username);
         return ldap_delete($this->ldapConnection, $dn);
     }
 
@@ -353,11 +353,22 @@ class Tx_T3oLdap_Connectors_Ldap {
      *
      * @param Integer $feUserUid Front end user uid
      * @param array $userData The user data array
+     * @param string $password Clear text user password
      * @return bool
      */
-    public function createUser($feUserUid, $userData) {
+    public function createUser($feUserUid, $userData, $password = '') {
 
         $ret = false;
+
+        if (empty($userData)) {
+            $userData = $this->getUserDataByUid($feUserUid);
+            if ($userData !== false) {
+                $userData['password'] = $password;
+            } else {
+                $userData = array();
+            }
+        }
+
         $dn = $this->getDnForUserName($userData['username']);
 
         $ldapUserObject = $this->buildLdapObjectArray($userData);
@@ -446,7 +457,9 @@ class Tx_T3oLdap_Connectors_Ldap {
         if ($this->isSaltedPassword($userData['password']) === false) {
             /** @var Tx_T3oLdap_Utility_PasswordHashing $passwordHashing */
             $passwordHashing = t3lib_div::makeInstance('Tx_T3oLdap_Utility_PasswordHashing');
-            $ldapUserObject['userPassword'] = $passwordHashing->getPasswordHash($userData['password'], 'sha1');
+            $ldapUserObject['userPassword'][] = $passwordHashing->getPasswordHash($userData['password'], 'sha1');
+            $ldapUserObject['userPassword'][] = $passwordHashing->getPasswordHash($userData['password'], 'crypt');
+            $ldapUserObject['userPassword'][] = $passwordHashing->getPasswordHash($userData['password'], 'md5');
         }
 
         if (trim($ldapUserObject['sn']) === '') {
@@ -516,6 +529,10 @@ class Tx_T3oLdap_Connectors_Ldap {
         $this->lastLdapError = $lastLdapError;
     }
 
+    /**
+     * @param $countryName
+     * @return bool
+     */
     private function getCountryDetailsByCountryName($countryName) {
 
         $ret = false;
@@ -523,6 +540,35 @@ class Tx_T3oLdap_Connectors_Ldap {
         $whereClause = 'cn_short_en LIKE ' . $GLOBALS['TYPO3_DB']->fullQuoteStr($countryName, 'static_countries');
         $selectFields = 'uid, cn_iso_2, cn_short_en';
         $fromTable = 'static_countries';
+        $groupBy = '';
+        $orderBy = '';
+        $limit = '1';
+
+        $result = $GLOBALS['TYPO3_DB']->exec_SELECTquery($selectFields, $fromTable, $whereClause, $groupBy, $orderBy, $limit);
+        if ( $result ) {
+            if ( $GLOBALS['TYPO3_DB']->sql_num_rows($result) == 1 ) {
+                $ret = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($result);
+                $GLOBALS['TYPO3_DB']->sql_free_result($result);
+            }
+        }
+
+        return $ret;
+
+    }
+
+    /**
+     * Get details of a fe_user
+     *
+     * @param $feUserUid
+     * @return Mixed bool|array
+     */
+    private function getUserDataByUid($feUserUid) {
+
+        $ret = false;
+
+        $whereClause = 'uid = ' . intval($feUserUid);
+        $selectFields = 'uid, username, first_name, last_name, address, zip, city, country, www, email, telephone, fax';
+        $fromTable = 'fe_users';
         $groupBy = '';
         $orderBy = '';
         $limit = '1';
