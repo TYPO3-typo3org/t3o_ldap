@@ -308,6 +308,36 @@ class Tx_T3oLdap_Connectors_Ldap {
     }
 
     /**
+     * Enable a user in LDAP
+     *
+     * @param string $username Username for DN
+     * @return bool
+     * @todo Requires refactoring for proper syntax of LDAP enabled/disabled
+     */
+    public function enableUser($username) {
+
+        $ret = false;
+        $dn = $this->getDnForUserName($username);
+        $ldapUserObject = array(
+            'active' => true
+        );
+        $res = ldap_modify(
+            $this->ldapConnection,
+            $dn,
+            $ldapUserObject
+        );
+
+        if ( $res === true ) {
+            // TODO $this->updateFeUserLastLdapUpdateTimestamp($feUserUid);
+            $ret = true;
+        } else {
+            $this->setLastLdapError(ldap_error($this->ldapConnection));
+        }
+
+        return $ret;
+    }
+
+    /**
      * Delete a user in LDAP
      *
      * @param array $userData The user data array
