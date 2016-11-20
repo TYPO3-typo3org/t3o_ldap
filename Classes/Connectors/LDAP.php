@@ -404,6 +404,11 @@ class Tx_T3oLdap_Connectors_Ldap {
                 3 => 'inetOrgPerson'
             )
         );
+        if (trim($userData['first_name']) === '' && trim($userData['last_name']) === '' && trim($userData['name']) !== '') {
+            $nameParts = t3lib_div::trimExplode(' ', $userData['name']);
+            $userData['last_name'] = array_pop($nameParts);
+            $userData['first_name'] = implode(' ', $nameParts);
+        }
 
         if ( trim($userData['first_name'] . ' ' . $userData['last_name']) !== '' ) {
             $ldapUserObject['cn'] = trim($userData['first_name'] . ' ' . $userData['last_name']);
