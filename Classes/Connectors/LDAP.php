@@ -458,6 +458,17 @@ class Tx_T3oLdap_Connectors_Ldap {
             $ldapUserObject['facsimileTelephoneNumber'] = trim($userData['fax']);
         }
 
+        // update terms and conditions data
+        if ($userData['accepted_terms_and_conditions'] === '1') {
+            $ldapUserObject['conditionsAccepted'] = 1;
+        }
+        if ($userData['tac_date_of_acceptance'] > 0) {
+            $ldapUserObject['conditionsDate'] = $userData['tac_date_of_acceptance'];
+        }
+        if ($userData['tac_version'] !== '') {
+            $ldapUserObject['conditionsVersion'] = $userData['tac_version'];
+        }
+
         // If the password is not salted, it has been submitted and must be included in the LDAP update
         if ($this->isSaltedPassword($userData['password']) === false) {
             /** @var Tx_T3oLdap_Utility_PasswordHashing $passwordHashing */
@@ -572,7 +583,7 @@ class Tx_T3oLdap_Connectors_Ldap {
         $ret = false;
 
         $whereClause = 'uid = ' . intval($feUserUid);
-        $selectFields = 'uid, username, first_name, last_name, address, zip, city, country, www, email, telephone, fax';
+        $selectFields = 'uid, username, first_name, last_name, name, address, zip, city, country, www, email, telephone, fax, tac_version, tac_date_of_acceptance, accepted_terms_and_conditions';
         $fromTable = 'fe_users';
         $groupBy = '';
         $orderBy = '';
